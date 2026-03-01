@@ -1,10 +1,8 @@
 import cv2
 import numpy as np
-import mediapipe as mp
-
-_drawing = mp.solutions.drawing_utils
-_styles = mp.solutions.drawing_styles
-_mp_mesh = mp.solutions.face_mesh
+from mediapipe.python.solutions import drawing_utils as _drawing
+from mediapipe.python.solutions import drawing_styles as _styles
+from mediapipe.python.solutions import face_mesh as _mp_mesh
 
 TESSELATION_SPEC = _styles.get_default_face_mesh_tesselation_style()
 CONTOUR_SPEC = _styles.get_default_face_mesh_contours_style()
