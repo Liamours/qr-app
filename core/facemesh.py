@@ -4,9 +4,13 @@ Face detection via OpenCV Haar cascade.
 No native shared-library dependencies, no model downloads — works on
 every platform opencv-python-headless supports, including Python 3.13.
 
-Public interface: FaceMesh().process(rgb_frame) → _DetectionResult
-  result.face_landmarks  →  list of _FaceLandmarks
-  landmarks[idx].x / .y →  normalised float in [0, 1]
+Public interface:
+    FaceMesh().process(rgb_frame) -> _DetectionResult
+    result.face_landmarks          -> list[_FaceLandmarks]  (may be empty)
+    landmarks[idx].x / .y          -> normalised float in [0, 1]
+
+If the cascade fails to load the detector degrades gracefully:
+process() returns an empty result instead of raising.
 """
 
 import os
@@ -25,9 +29,7 @@ class _Landmark:
 class _FaceLandmarks:
     """
     Six key-point estimates derived from a face bounding box.
-
-    Fractions are chosen to match the approximate positions of the
-    MediaPipe 468-point indices that renderer.py depends on:
+    Indices match the MediaPipe topology used by renderer.py:
         10  → forehead top-centre
         234 → left cheek edge
         454 → right cheek edge
@@ -63,37 +65,51 @@ class _DetectionResult:
         self.face_landmarks = face_landmarks
 
 
+_EMPTY = _DetectionResult([])
+
+
 class FaceMesh:
     def __init__(self, max_faces: int = 2,
                  min_detect: float = 0.5,
                  min_track: float = 0.5) -> None:
-        cascade_path = os.path.join(
-            cv2.data.haarcascades, "haarcascade_frontalface_default.xml"
-        )
-        self._detector = cv2.CascadeClassifier(cascade_path)
-        if self._detector.empty():
-            raise RuntimeError(
-                f"Failed to load Haar cascade from: {cascade_path}"
+        try:
+            cascade_path = os.path.join(
+                cv2.data.haarcascades,
+                "haarcascade_frontalface_default.xml",
             )
+            detector = cv2.CascadeClassifier(cascade_path)
+            self._detector = None if detector.empty() else detector
+        except Exception:
+            self._detector = None
+
         self._max_faces = max_faces
 
     def process(self, rgb_frame) -> _DetectionResult:
-        gray = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2GRAY)
-        img_h, img_w = gray.shape
+        if self._detector is None:
+            return _EMPTY
 
-        faces = self._detector.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(60, 60),
-        )
+        try:
+            gray = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2GRAY)
+            img_h, img_w = gray.shape
 
-        landmarks: list = []
-        if len(faces) > 0:
-            for (x, y, w, h) in faces[: self._max_faces]:
-                landmarks.append(_FaceLandmarks(x, y, w, h, img_w, img_h))
+            faces = self._detector.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(60, 60),
+            )
 
-        return _DetectionResult(landmarks)
+            if len(faces) == 0:
+                return _EMPTY
+
+            landmarks = [
+                _FaceLandmarks(x, y, w, h, img_w, img_h)
+                for (x, y, w, h) in faces[: self._max_faces]
+            ]
+            return _DetectionResult(landmarks)
+
+        except Exception:
+            return _EMPTY
 
     def close(self) -> None:
         pass

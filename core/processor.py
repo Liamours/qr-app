@@ -8,6 +8,7 @@ from streamlit_webrtc import VideoProcessorBase
 
 class FaceFilterProcessor(VideoProcessorBase):
     def __init__(self, assets):
+        # FaceMesh never raises — safe to call unconditionally
         self.face_mesh = FaceMesh()
         self.assets = assets
         self.mode = "hat"
@@ -15,30 +16,35 @@ class FaceFilterProcessor(VideoProcessorBase):
         self._snapshot = None
         self._gif_idx = 0
         self._last_landmarks = []
-        self._ema_state = {}  # per-instance EMA state — no shared globals
+        self._ema_state: dict = {}
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-        img = frame.to_ndarray(format="bgr24")
-        img = cv2.flip(img, 1)
-
+        # Keep the original frame object as a last-resort fallback
         try:
-            img = self._process(img)
+            img = frame.to_ndarray(format="bgr24")
+            img = cv2.flip(img, 1)
+
+            try:
+                img = self._process(img)
+            except Exception:
+                pass  # Return the mirrored-but-unfiltered frame
+
+            with self._lock:
+                self._snapshot = img.copy()
+
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
+
         except Exception:
-            # Never crash the WebRTC session — return the raw mirrored frame
-            pass
-
-        with self._lock:
-            self._snapshot = img.copy()
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
+            # If even basic frame conversion fails, echo the original
+            return frame
 
     def _process(self, img):
         h, w = img.shape[:2]
 
-        # Downscale for detection while preserving the aspect ratio so that
+        # Downscale for detection, preserving the aspect ratio so that
         # normalised landmark coordinates map correctly onto the full frame.
-        scale = min(1.0, 640 / w)
-        det_w, det_h = int(w * scale), int(h * scale)
+        det_w = min(w, 640)
+        det_h = int(h * det_w / w)
         small = cv2.resize(img, (det_w, det_h))
         rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
 

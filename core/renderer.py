@@ -120,7 +120,7 @@ def apply_mustache(frame, landmarks, asset_img, state: dict, scale: float = 1.5)
 
 
 def apply_filter(frame, landmarks, mode: str, assets: dict,
-                 gif_idx: int, state: dict) -> None:
+                 gif_idx: int, state: dict):
     """Single dispatch entry point called by processor.py."""
     if mode == "hat":
         return apply_hat(frame, landmarks, assets["hat"], state)
