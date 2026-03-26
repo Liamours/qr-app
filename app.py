@@ -89,12 +89,29 @@ selected_label = st.radio(
 )
 selected_mode = FILTER_OPTIONS[selected_label]
 
-# Multiple STUN servers for better connectivity on Streamlit Cloud
+# STUN + TURN configuration for Streamlit Cloud.
+# STUN alone fails when both peers are behind symmetric NAT (common on cloud).
+# TURN servers act as a relay of last resort.
+# Credentials below are from the free OpenRelay public TURN service.
 RTC_CONFIG = RTCConfiguration({
     "iceServers": [
         {"urls": ["stun:stun.l.google.com:19302"]},
         {"urls": ["stun:stun1.l.google.com:19302"]},
-        {"urls": ["stun:stun2.l.google.com:19302"]},
+        {
+            "urls": ["turn:openrelay.metered.ca:80"],
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+        {
+            "urls": ["turn:openrelay.metered.ca:443"],
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
+        {
+            "urls": ["turn:openrelay.metered.ca:443?transport=tcp"],
+            "username": "openrelayproject",
+            "credential": "openrelayproject",
+        },
     ]
 })
 
