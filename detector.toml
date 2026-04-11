@@ -1,0 +1,3 @@
+[detector]
+# Options: "haar" | "mediapipe"
+backend = "mediapipe"
